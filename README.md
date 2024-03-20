@@ -27,12 +27,14 @@ git clone https://github.com/MBot-Project-Development/mbot_apriltag.git
 
 ## Usage and Features
 ### Run scripts
+- `python3 test_camera.py`
+    - Just to test if your camera is functional and if the ID is correct.
 - `python3 video_streamer.py`
     - Visit `http://your_mbot_ip:5001/video`
-    - Only shows the video stream to test your camera
+    - Only shows the video stream, to test your camera and your dependency installation
 - `python3 save_image.py`
     - Visit `http://your_mbot_ip:5001`
-    - Show the video stream to save image to `/images` for camera calibration
+    - Shows the video stream, we use it to save image to `/images` for camera calibration
 - `python3 camera_calibration.py`
     - Use the images from `/images` and output calibration result as `cam_calibration_data.npz`. The result will be used directly by apriltag_streamer.py you don't have to modify anything.
 - `python3 apriltag_streamer.py`
@@ -44,6 +46,7 @@ git clone https://github.com/MBot-Project-Development/mbot_apriltag.git
     - Listen to `MBOT_APRILTAG_ARRAY` for apriltag lcm message
 
 ### Troubleshooting
+#### libapriltag.so.3
 If encounter error during runtime:"ImportError: libapriltag.so.3: cannot open shared object file: No such file or directory"
 
 1. Verify the Installation Location
