@@ -5,7 +5,8 @@ import atexit
 
 """
 This script only displays the video live stream to browser.
-This is a simple program to headlessly check if the camera work
+It is mainly for testing your setup along with test.camera.py.
+This is a simple program to headlessly check if the camera work and Flask is ready to use.
 visit: http://your_mbot_ip:5001/video
 """
 
@@ -37,10 +38,6 @@ class Camera:
         appsink" % (i, w, h)
 
     def generate_frames(self):
-        if not self.cap.isOpened():
-            print("Trying to open the camera...")
-            self.cap.open(self.camera_pipeline(1280, 720), cv2.CAP_GSTREAMER)
-        
         if not self.cap.isOpened():
             raise IOError("Cannot open cam")
 
