@@ -49,5 +49,8 @@ for i in range(0, 2):  # Adjust the range based on how many cameras you expect
         valid_id = i
 
 print("================================")
-print(f"Your camera ID {valid_id} is functional!")
+if (valid_id == -1):
+    print(f"Cannot read your camera!")
+else:
+    print(f"Your camera ID {valid_id} is functional!")
 print("================================")
