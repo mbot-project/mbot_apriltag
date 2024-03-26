@@ -102,7 +102,7 @@ class Camera:
                         image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
                         retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-                    if detect['id'] > 10: # small tag at center
+                    if detect['id'] >= 10: # small tag at center
                         image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
                         retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
