@@ -1,14 +1,21 @@
+from flask import Flask, Response
 import cv2
 import time
 import atexit
 import numpy as np
 from apriltag import apriltag
 import math
+import threading
 import lcm
 from mbot_lcm_msgs.twist2D_t import twist2D_t
 
 """
-This script allow mbot to follow apriltag
+Features:
+1. Displays the video live stream with apriltag detection to browser
+2. Display the post estimate values
+3. Follow apriltag when the tag is in sight
+
+visit: http://your_mbot_ip:5001/video
 """
 
 class Camera:
@@ -62,12 +69,13 @@ class Camera:
         format=(string)BGR ! \
         appsink"
 
-    def detect(self):
+    def generate_frames(self):
         while True:
+            self.frame_count += 1
             success, frame = self.cap.read()
             if not success:
                 break
-            self.frame_count += 1
+
             # Process for tag detection only every 5th frame
             if self.frame_count % self.skip_frames == 0:
                 # Convert frame to grayscale for detection
@@ -82,34 +90,47 @@ class Camera:
                     except RuntimeError as e:
                         if "Unable to create" in str(e) and attempt < max_retries - 1:
                             print(f"Detection failed due to thread creation issue, retrying... Attempt {attempt + 1}")
-                            time.sleep(0.1)  # Optional: back off for a moment
+                            time.sleep(0.2)  # back off for a moment
                         else:
                             raise  # Re-raise the last exception if retries exhausted
-            
-                self.follow_apriltag()
 
-    def follow_apriltag(self):
-        if self.detections:
-            print("Tag in sight")
-            for detect in self.detections:
-                # Pose estimation for detected tag
-                image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
-                if detect['id'] < 10: # big tag
-                    retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+            if self.detections:
+                visible_tags = 0
+                for detect in self.detections:
+                    visible_tags += 1
 
-                if detect['id'] >= 10: # small tag at center
-                    retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+                    # Draw the corners of the tag
+                    corners = np.array(detect['lb-rb-rt-lt'], dtype=np.int32).reshape((-1, 1, 2))
+                    cv2.polylines(frame, [corners], isClosed=True, color=(0, 255, 0), thickness=2)
 
-                # Convert rotation vector to a rotation matrix
-                rotation_matrix, _ = cv2.Rodrigues(rvec)
+                    # Pose estimation for detected tag
+                    if detect['id'] < 10: # big tag
+                        image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
+                        retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-                # Calculate Euler angles 
-                roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
+                    if detect['id'] >= 10: # small tag at center
+                        image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
+                        retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-                self.publish_velocity_command(tvec[0][0], tvec[2][0], roll, pitch, yaw)
-        else:
-            self.publish_velocity_command(0, 0)
-            print("No tag in sight")
+                    # Convert rotation vector to a rotation matrix
+                    rotation_matrix, _ = cv2.Rodrigues(rvec)
+
+                    # Calculate Euler angles 
+                    roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
+                    
+                    self.publish_velocity_command(tvec[0][0], tvec[2][0], roll, pitch, yaw)
+
+                    pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f},"
+                    orientation_text = f" roll={roll:.2f}, pitch={pitch:.2f}, yaw={yaw:.2f}"
+                    vertical_pos = 40*visible_tags
+                    cv2.putText(frame, pos_text+orientation_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 0, 0), 2)
+            else:
+                self.publish_velocity_command(0, 0)
+            # Encode the frame
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
     def publish_velocity_command(self, x, z, roll=0, pitch=0, yaw=0):
         """
@@ -169,15 +190,18 @@ def calculate_euler_angles_from_rotation_matrix(R):
 
     return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
+app = Flask(__name__)
+@app.route('/video')
+def video():
+    return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
     # image width and height here should align with save_image.py
     camera_id = 0
     image_width = 1280
     image_height = 720
-    frame_rate = 10
+    frame_rate = 20
     camera = Camera(camera_id, image_width, image_height, frame_rate) 
     atexit.register(camera.cleanup)
-    camera.detect()
-
+    app.run(host='0.0.0.0', port=5001)
 
