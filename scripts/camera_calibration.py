@@ -14,8 +14,8 @@ your calibration result might be problematic.
 # TODO: 
 # 1. Change the CHECKERBOARD dimensions to your checkerboardsetup
 # 2. Change the square_size to your checkerboard setup
-CHECKERBOARD = (7,9)    
-square_size = 20    # in millimeter
+CHECKERBOARD = (6,8)    
+square_size = 25    # in millimeter
  
 # Creating vector to store vectors of 3D points for each checkerboard image
 objpoints = []

@@ -1,13 +1,14 @@
 from flask import Flask, Response, render_template, request, jsonify
-import threading
+from picamera2 import Picamera2 
+import libcamera
 import cv2
-import time
 import atexit
 import numpy as np
 import signal
 import os
 
 """
+PI 5 Version
 This script displays the video live stream to browser with a button "save image".
 When you click the button, the current frame will be saved to "/images"
 visit: http://your_mbot_ip:5001
@@ -15,69 +16,34 @@ visit: http://your_mbot_ip:5001
 
 class Camera:
     def __init__(self, camera_id, width, height):
-        self.cap = cv2.VideoCapture(self.camera_pipeline(camera_id, width, height))
+        self.cap = Picamera2(camera_id)
+        self.w = width
+        self.h = height
+        config = self.cap.create_preview_configuration(main={"size": (self.w, self.h), "format": "RGB888"})
+        config["transform"] = libcamera.Transform(hflip=0, vflip=1)
+        self.cap.align_configuration(config)
+        self.cap.configure(config)
+        self.cap.start()
         self.image_count = 0
-        self.lock = threading.Lock()
         self.frame = None
         self.running = True
-        self.update_thread = threading.Thread(target=self.update_frame, args=())
-        self.update_thread.start()
-
-    def camera_pipeline(self, i, w, h):
-        """
-        Generates a GStreamer pipeline string for capturing video from an NVIDIA camera.
-
-        Parameters:
-        i (int): The sensor ID of the camera.
-        w (int): The width of the video frame in pixels.
-        h (int): The height of the video frame in pixels.
-        """
-        return f"nvarguscamerasrc sensor_id={i} ! \
-        video/x-raw(memory:NVMM), \
-        width=1280, height=720, \
-        format=(string)NV12, \
-        framerate=30/1 ! \
-        nvvidconv \
-        flip-method=0 ! \
-        video/x-raw, \
-        format=(string)BGRx, \
-        width={w}, height={h} !\
-        videoconvert ! \
-        video/x-raw, \
-        format=(string)BGR ! \
-        appsink"
-
-    def update_frame(self):
-        while self.running:
-            success, frame = self.cap.read()
-            if not success:
-                self.running = False
-            with self.lock:
-                self.frame = frame
 
     def get_frame(self):
-        with self.lock:
-            return self.frame if self.frame is not None else None
+        return self.cap.capture_array()
 
     def generate_frames(self):
         while self.running:
             frame = self.get_frame()
-            if frame is not None:
-                # Encode the frame 
-                ret, buffer = cv2.imencode('.jpg', frame)
-                frame = buffer.tobytes()
-                yield (b'--frame\r\n'
-                        b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            else:
-                # If no frame is captured, we just continue the loop and try again
-                continue
+            # Encode the frame 
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
 
     def cleanup(self):
         self.running = False
-        if self.update_thread.is_alive():
-            self.update_thread.join()  # Wait for the frame update thread to finish
-        if self.cap and self.cap.isOpened():
-            self.cap.release()
+        self.cap.stop()
         print("Camera resources released")
 
 def signal_handler(sig, frame):

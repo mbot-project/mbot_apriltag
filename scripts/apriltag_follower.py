@@ -6,14 +6,29 @@ from apriltag import apriltag
 import math
 import lcm
 from mbot_lcm_msgs.twist2D_t import twist2D_t
+from picamera2 import Picamera2 
+import libcamera
 
 """
 This script allow mbot to follow apriltag
 """
 
 class Camera:
-    def __init__(self, camera_id, width, height, framerate):
-        self.cap = cv2.VideoCapture(self.camera_pipeline(camera_id, width, height, framerate))
+    def __init__(self, camera_id, width, height, frame_duration):
+        self.cap = Picamera2(camera_id)
+        self.w = width
+        self.h = height
+        config = self.cap.create_preview_configuration(
+            main={"size": (self.w, self.h), "format": "RGB888"},
+            controls = {
+                'FrameDurationLimits': (frame_duration, frame_duration) # (min, max) microseconds
+            }
+        )
+        config["transform"] = libcamera.Transform(hflip=1, vflip=1)
+        self.cap.align_configuration(config)
+        self.cap.configure(config)
+        self.cap.start()
+        
         self.detector = apriltag("tagCustom48h12", threads=1)
         self.skip_frames = 5  # Process every 5th frame for tag detection
         self.frame_count = 0
@@ -37,37 +52,11 @@ class Camera:
         ], dtype=np.float32)
         self.lcm = lcm.LCM("udpm://239.255.76.67:7667?ttl=0")
 
-    def camera_pipeline(self, i, w, h, framerate):
-        """
-        Generates a GStreamer pipeline string for capturing video from an NVIDIA camera.
-
-        Parameters:
-        i (int): The sensor ID of the camera.
-        w (int): The width of the video frame in pixels.
-        h (int): The height of the video frame in pixels.
-        framerate (int): The framerate of the video in frames per second.
-        """
-        return f"nvarguscamerasrc sensor_id={i} ! \
-        video/x-raw(memory:NVMM), \
-        width=1280, height=720, \
-        format=(string)NV12, \
-        framerate={framerate}/1 ! \
-        nvvidconv \
-        flip-method=0 ! \
-        video/x-raw, \
-        format=(string)BGRx, \
-        width={w}, height={h} !\
-        videoconvert ! \
-        video/x-raw, \
-        format=(string)BGR ! \
-        appsink"
-
     def detect(self):
         while True:
-            success, frame = self.cap.read()
-            if not success:
-                break
             self.frame_count += 1
+            frame = self.cap.capture_array()
+
             # Process for tag detection only every 5th frame
             if self.frame_count % self.skip_frames == 0:
                 # Convert frame to grayscale for detection
@@ -147,8 +136,7 @@ class Camera:
     def cleanup(self):
         print("Releasing camera resources")
         self.publish_velocity_command(0, 0)
-        if self.cap and self.cap.isOpened():
-            self.cap.release()
+        self.cap.stop()
 
 def calculate_euler_angles_from_rotation_matrix(R):
     """
@@ -175,8 +163,9 @@ if __name__ == '__main__':
     camera_id = 0
     image_width = 1280
     image_height = 720
-    frame_rate = 10
-    camera = Camera(camera_id, image_width, image_height, frame_rate) 
+    fps = 20
+    frame_duration = int((1./fps)*1e6)
+    camera = Camera(camera_id, image_width, image_height, frame_duration) 
     atexit.register(camera.cleanup)
     camera.detect()
 

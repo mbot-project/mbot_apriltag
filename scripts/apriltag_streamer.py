@@ -1,21 +1,35 @@
+#!/usr/bin/env python3
+from apriltag import apriltag
 from flask import Flask, Response
 import cv2
 import time
 import atexit
 import numpy as np
-from apriltag import apriltag
-import math
-import threading
+from picamera2 import Picamera2 
+import libcamera
 
 """
 This script displays the video live stream with apriltag detection to browser.
 The pose estimation will display as well.
-visit: http://your_mbot_ip:5001/video
+visit: http://your_mbot_ip:5001
 """
 
 class Camera:
-    def __init__(self, camera_id, width, height, framerate):
-        self.cap = cv2.VideoCapture(self.camera_pipeline(camera_id, width, height, framerate))
+    def __init__(self, camera_id, width, height, frame_duration):
+        self.cap = Picamera2(camera_id)
+        self.w = width
+        self.h = height
+        config = self.cap.create_preview_configuration(
+            main={"size": (self.w, self.h), "format": "RGB888"},
+            controls = {
+                'FrameDurationLimits': (frame_duration, frame_duration) # (min, max) microseconds
+            }
+        )
+        config["transform"] = libcamera.Transform(hflip=1, vflip=1)
+        self.cap.align_configuration(config)
+        self.cap.configure(config)
+        self.cap.start()
+
         self.detector = apriltag("tagCustom48h12", threads=1)
         self.skip_frames = 5  # Process every 5th frame for tag detection
         self.frame_count = 0
@@ -38,37 +52,10 @@ class Camera:
             [-self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-left corner
         ], dtype=np.float32)
 
-    def camera_pipeline(self, i, w, h, framerate):
-        """
-        Generates a GStreamer pipeline string for capturing video from an NVIDIA camera.
-
-        Parameters:
-        i (int): The sensor ID of the camera.
-        w (int): The width of the video frame in pixels.
-        h (int): The height of the video frame in pixels.
-        framerate (int): The framerate of the video in frames per second.
-        """
-        return f"nvarguscamerasrc sensor_id={i} ! \
-        video/x-raw(memory:NVMM), \
-        width=1280, height=720, \
-        format=(string)NV12, \
-        framerate={framerate}/1 ! \
-        nvvidconv \
-        flip-method=0 ! \
-        video/x-raw, \
-        format=(string)BGRx, \
-        width={w}, height={h} !\
-        videoconvert ! \
-        video/x-raw, \
-        format=(string)BGR ! \
-        appsink"
-
     def generate_frames(self):
         while True:
             self.frame_count += 1
-            success, frame = self.cap.read()
-            if not success:
-                break
+            frame = self.cap.capture_array()
 
             # Process for tag detection only every 5th frame
             if self.frame_count % self.skip_frames == 0:
@@ -125,8 +112,8 @@ class Camera:
 
     def cleanup(self):
         print("Releasing camera resources")
-        if self.cap and self.cap.isOpened():
-            self.cap.release()
+        if self.cap:
+            self.cap.stop()
 
 def calculate_euler_angles_from_rotation_matrix(R):
     """
@@ -148,7 +135,7 @@ def calculate_euler_angles_from_rotation_matrix(R):
     return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
 app = Flask(__name__)
-@app.route('/video')
+@app.route('/')
 def video():
     return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -157,8 +144,9 @@ if __name__ == '__main__':
     camera_id = 0
     image_width = 1280
     image_height = 720
-    frame_rate = 20
-    camera = Camera(camera_id, image_width, image_height, frame_rate) 
+    fps = 10
+    frame_duration = int((1./fps)*1e6)
+    camera = Camera(camera_id, image_width, image_height, frame_duration) 
     atexit.register(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)
 
