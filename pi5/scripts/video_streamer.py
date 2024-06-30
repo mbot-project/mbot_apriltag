@@ -3,6 +3,7 @@ from picamera2 import Picamera2
 import libcamera
 import cv2
 import atexit
+import signal
 
 """
 PI 5 Version
@@ -32,11 +33,21 @@ class Camera:
                     b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
     def cleanup(self):
-        print("Releasing camera resources")
-        self.cap.stop()
+        if self.cap:
+            print("Releasing camera resources")
+            self.cap.close()
+            self.cap = None  # Avoid double cleanup
 
 app = Flask(__name__)
 camera = Camera(0, 1280, 720)
+
+def signal_handler(sig, frame):
+    print('Received signal to terminate')
+    camera.cleanup()
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 atexit.register(camera.cleanup)
 
 @app.route('/')

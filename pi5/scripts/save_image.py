@@ -41,7 +41,7 @@ class Camera:
 
     def cleanup(self):
         self.running = False
-        self.cap.stop()
+        self.cap.close()
         print("Camera resources released")
 
 def signal_handler(sig, frame):

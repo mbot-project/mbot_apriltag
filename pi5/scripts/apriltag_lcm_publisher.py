@@ -9,6 +9,7 @@ from mbot_lcm_msgs.mbot_apriltag_array_t import mbot_apriltag_array_t
 from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
 from picamera2 import Picamera2 
 import libcamera
+import signal
 
 """
 This script publish apriltag lcm message to MBOT_APRILTAG_ARRAY
@@ -114,8 +115,10 @@ class Camera:
         self.lcm.publish("MBOT_APRILTAG_ARRAY", msg.encode())
 
     def cleanup(self):
-        print("Releasing camera resources")
-        self.cap.stop()
+        if self.cap:
+            print("Releasing camera resources")
+            self.cap.close()
+            self.cap = None  # Avoid double cleanup
 
 def rotation_matrix_to_euler_angles(R):
     """
@@ -156,6 +159,11 @@ def rotation_matrix_to_quaternion(R):
     qz = np.copysign(qz, m10 - m01)
     return np.array([qx, qy, qz, qw])
 
+def signal_handler(sig, frame):
+    print('Received signal to terminate')
+    camera.cleanup()
+    exit(0)
+
 if __name__ == '__main__':
     # image width and height here should align with save_image.py
     camera_id = 0
@@ -164,7 +172,11 @@ if __name__ == '__main__':
     fps = 10
     frame_duration = int((1./fps)*1e6)
     camera = Camera(camera_id, image_width, image_height, frame_duration) 
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     atexit.register(camera.cleanup)
+    
     camera.detect()
 
 
