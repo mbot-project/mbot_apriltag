@@ -6,8 +6,7 @@ This project offers tools for camera calibration and Apriltag pose estimation, s
 The provided scripts enable users to:
 - Stream live camera feeds directly to a browser, allowing for real-time viewing and interaction.
 - Publish and subscribe to Apriltag LCM messages.
-
-Only Linux operating systems are supported.
+- MBot following Apriltags.
 
 ## Installation
 ### Install Apriltag Library
@@ -23,7 +22,7 @@ Only Linux operating systems are supported.
     sudo cmake --build build --target install
     ```
 
-3. Add python path
+3. Add Python path
     ```bash
     $ echo 'export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.11/site-packages' >> ~/.bashrc
     ```
