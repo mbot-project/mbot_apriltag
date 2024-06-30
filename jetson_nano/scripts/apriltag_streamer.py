@@ -6,16 +6,11 @@ import numpy as np
 from apriltag import apriltag
 import math
 import threading
-import lcm
-from mbot_lcm_msgs.twist2D_t import twist2D_t
 
 """
-Features:
-1. Displays the video live stream with apriltag detection to browser
-2. Display the post estimate values
-3. Follow apriltag when the tag is in sight
-
-visit: http://your_mbot_ip:5001/video
+This script displays the video live stream with apriltag detection to browser.
+The pose estimation will display as well.
+visit: http://your_mbot_ip:5001
 """
 
 class Camera:
@@ -42,7 +37,6 @@ class Camera:
             [ self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-right corner
             [-self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-left corner
         ], dtype=np.float32)
-        self.lcm = lcm.LCM("udpm://239.255.76.67:7667?ttl=0")
 
     def camera_pipeline(self, i, w, h, framerate):
         """
@@ -117,57 +111,20 @@ class Camera:
 
                     # Calculate Euler angles 
                     roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
-                    
-                    self.publish_velocity_command(tvec[0][0], tvec[2][0], roll, pitch, yaw)
 
                     pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f},"
                     orientation_text = f" roll={roll:.2f}, pitch={pitch:.2f}, yaw={yaw:.2f}"
                     vertical_pos = 40*visible_tags
                     cv2.putText(frame, pos_text+orientation_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 0, 0), 2)
-            else:
-                self.publish_velocity_command(0, 0)
+
             # Encode the frame
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-    def publish_velocity_command(self, x, z, roll=0, pitch=0, yaw=0):
-        """
-        Publish a velocity command based on the x and z offset of the detected tag.
-        """
-        # Constants
-        k_p_linear = 0.001  # Proportional gain for linear velocity
-        k_p_angular = 2  # Proportional gain for angular velocity
-        z_target = 150  # Target distance (millimeters)
-
-        # Calculate angular velocity
-        theta = math.atan2(x, z)  # Angle to target
-        wz = -k_p_angular * theta  # Angular velocity
-        
-        # Calculate linear velocity
-        if z - z_target > 0:
-            vx = k_p_linear * (z - z_target)  # Move forward if target is ahead
-        else:
-            vx = 0  # Stop 
-
-        # Adjust linear velocity based on orientation (optional)
-        # Example: Reduce linear velocity if pitch angle is high
-        max_pitch_angle = 20  # Maximum pitch angle (degrees)
-        if abs(pitch) > max_pitch_angle:
-            vx *= 0.5  # Reduce linear velocity by half if pitch angle exceeds threshold
-
-        # Create the velocity command message
-        command = twist2D_t()
-        command.vx = vx
-        command.wz = wz
-        
-        # Publish the velocity command
-        self.lcm.publish("MBOT_VEL_CMD", command.encode())
-
     def cleanup(self):
         print("Releasing camera resources")
-        self.publish_velocity_command(0, 0)
         if self.cap and self.cap.isOpened():
             self.cap.release()
 
@@ -191,7 +148,7 @@ def calculate_euler_angles_from_rotation_matrix(R):
     return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
 app = Flask(__name__)
-@app.route('/video')
+@app.route('/')
 def video():
     return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 

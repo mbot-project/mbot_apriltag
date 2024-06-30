@@ -7,7 +7,7 @@ import atexit
 This script only displays the video live stream to browser.
 It is mainly for testing your setup along with test.camera.py.
 This is a simple program to headlessly check if the camera work and Flask is ready to use.
-visit: http://your_mbot_ip:5001/video
+visit: http://your_mbot_ip:5001
 """
 
 class Camera:
@@ -61,7 +61,7 @@ app = Flask(__name__)
 camera = Camera(0, 1280, 720)
 atexit.register(camera.cleanup)
 
-@app.route('/video')
+@app.route('/')
 def video():
     return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 

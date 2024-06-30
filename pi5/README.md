@@ -1,13 +1,10 @@
-# mbot_apriltag
+## Pi 5 mbot_apriltag usage
+This project provides tools for camera calibration and Apriltag pose estimation, tailored for use with the MBot equipped with a **Raspberry Pi 5**.
 
-## Description
-This project offers tools for camera calibration and Apriltag pose estimation, specifically tailored for use with the MBot equipped with a **Jetson Nano**.
-
-The provided scripts enable users to:
-- Stream live camera feeds directly to a browser, allowing for real-time viewing and interaction.
-- Publish and subscribe to Apriltag LCM messages.
-
-Only Linux operating systems are supported.
+The scripts offer:
+- Streaming live camera feeds to a browser for real-time viewing and interaction.
+- Publishing and subscribing to Apriltag LCM messages.
+- MBot following Apriltags.
 
 ## Installation
 ### Install Apriltag Library
@@ -25,7 +22,7 @@ Only Linux operating systems are supported.
 
 3. Add python path
     ```bash
-    $ echo 'export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.11/site-packages' >> ~/.bashrc
+    echo 'export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.11/site-packages' >> ~/.bashrc
     ```
 
 ### Clone this repo
@@ -77,6 +74,3 @@ If you encounter the following runtime error: "ImportError: libapriltag.so.3: ca
     $ sudo ldconfig
     ```
     - After updating, try running video_streamer.py again to check if the issue is resolved.
-
-## Authors and maintainers
-- The current maintainer of this project is Shaw Sun. Please direct all questions regarding support, contributions, and issues to the maintainer.

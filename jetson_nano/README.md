@@ -1,13 +1,10 @@
-# mbot_apriltag
+## Jetson nano mbot_apriltag usage
+This project provides tools for camera calibration and Apriltag pose estimation, tailored for use with the MBot equipped with a **Jetson Nano**.
 
-## Description
-This project offers tools for camera calibration and Apriltag pose estimation, specifically tailored for use with the MBot equipped with a **Jetson Nano**.
-
-The provided scripts enable users to:
-- Stream live camera feeds directly to a browser, allowing for real-time viewing and interaction.
-- Publish and subscribe to Apriltag LCM messages.
-
-Only Linux operating systems are supported.
+The scripts offer:
+- Streaming live camera feeds to a browser for real-time viewing and interaction.
+- Publishing and subscribing to Apriltag LCM messages.
+- MBot following Apriltags.
 
 ## Installation
 ### Install Apriltag Library
@@ -35,18 +32,16 @@ pip install Flask
 
 ## Usage and Features
 ### Run scripts
+> Visit `http://your_mbot_ip:5001` to see the stream video
 - `python3 test_camera.py`
     - To test if your camera is functional and if the ID is correct.
 - `python3 video_streamer.py`
-    - Visit `http://your_mbot_ip:5001/video`
     - Only shows the video stream, to test your camera and your dependency installation
 - `python3 save_image.py`
-    - Visit `http://your_mbot_ip:5001`
     - Shows the video stream, we use it to save image to `/images` for camera calibration
 - `python3 camera_calibration.py`
     - Use the images from `/images` and output calibration result as `cam_calibration_data.npz`. The result will be used directly by apriltag_streamer.py you don't have to modify anything.
 - `python3 apriltag_streamer.py`
-    - Visit `http://your_mbot_ip:5001/video`
     - It runs apriltag detection, when tag is detected, pose estimation will be printed on the screen.
 - `python3 apriltag_lcm_publisher.py`
     - Publish apriltag lcm message over `MBOT_APRILTAG_ARRAY`
@@ -55,7 +50,6 @@ pip install Flask
 - `python3 apriltag_follower.py`
     - Allow mbot to follow the apriltag in sight
 - `python3 apriltag_follower_streamer.py`
-    - Visit: http://your_mbot_ip:5001/video
     - Allow mbot to follow the apriltag in sight, while forwaring video stream to browser
 
 ## Troubleshooting
@@ -132,7 +126,3 @@ If you encounter the following runtime error: "ImportError: libapriltag.so.3: ca
     $ sudo ldconfig
     ```
     - After updating, try running video_streamer.py again to check if the issue is resolved.
-
-## Authors and maintainers
-- The original author of this project is Shaw Sun.
-- The current maintainer of this project is Shaw Sun. Please direct all questions regarding support, contributions, and issues to the maintainer. The maintainer is responsible for overseeing the project's development, reviewing and merging contributions, and ensuring the project's ongoing stability and relevance.
