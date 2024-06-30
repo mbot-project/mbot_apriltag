@@ -1,7 +1,7 @@
 # mbot_apriltag
 
 ## Description
-This project offers tools for camera calibration and Apriltag pose estimation, specifically tailored for use with the MBot equipped with a **Jetson Nano** and **Raspeberry Pi 5**.
+This project offers tools for camera calibration and Apriltag pose estimation, specifically tailored for use with the MBot equipped with a **Jetson Nano**.
 
 The provided scripts enable users to:
 - Stream live camera feeds directly to a browser, allowing for real-time viewing and interaction.

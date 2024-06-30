@@ -17,9 +17,7 @@ visit: http://your_mbot_ip:5001
 class Camera:
     def __init__(self, camera_id, width, height):
         self.cap = Picamera2(camera_id)
-        self.w = width
-        self.h = height
-        config = self.cap.create_preview_configuration(main={"size": (self.w, self.h), "format": "RGB888"})
+        config = self.cap.create_preview_configuration(main={"size": (width, height), "format": "RGB888"})
         config["transform"] = libcamera.Transform(hflip=0, vflip=1)
         self.cap.align_configuration(config)
         self.cap.configure(config)
