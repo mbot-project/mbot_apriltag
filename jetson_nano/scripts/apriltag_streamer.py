@@ -10,7 +10,7 @@ import threading
 """
 This script displays the video live stream with apriltag detection to browser.
 The pose estimation will display as well.
-visit: http://your_mbot_ip:5001/video
+visit: http://your_mbot_ip:5001
 """
 
 class Camera:
@@ -148,7 +148,7 @@ def calculate_euler_angles_from_rotation_matrix(R):
     return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
 app = Flask(__name__)
-@app.route('/video')
+@app.route('/')
 def video():
     return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
