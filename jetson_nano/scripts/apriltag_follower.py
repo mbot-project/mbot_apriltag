@@ -5,12 +5,10 @@ import numpy as np
 from apriltag import apriltag
 import math
 import lcm
-from mbot_lcm_msgs.mbot_apriltag_array_t import mbot_apriltag_array_t
-from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
-import threading
+from mbot_lcm_msgs.twist2D_t import twist2D_t
 
 """
-This script publish apriltag lcm message to MBOT_APRILTAG_ARRAY
+This script allow mbot to follow apriltag
 """
 
 class Camera:
@@ -88,50 +86,71 @@ class Camera:
                         else:
                             raise  # Re-raise the last exception if retries exhausted
             
-                self.publish_apriltag()
+                self.follow_apriltag()
 
-    def publish_apriltag(self):
-        """
-        Publish the apriltag message
-        """
-        msg = mbot_apriltag_array_t()
-        msg.array_size = len(self.detections)
-        msg.detections = []
-        if msg.array_size > 0:
+    def follow_apriltag(self):
+        if self.detections:
+            print("Tag in sight")
             for detect in self.detections:
                 # Pose estimation for detected tag
                 image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
                 if detect['id'] < 10: # big tag
                     retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-                if detect['id'] > 10: # small tag at center
+                if detect['id'] >= 10: # small tag at center
                     retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-                # Convert rotation vector  to a rotation matrix
+                # Convert rotation vector to a rotation matrix
                 rotation_matrix, _ = cv2.Rodrigues(rvec)
-         
-                # # Calculate Euler angles: roll, pitch, yaw - x, y, z in degrees
-                # for apriltag, x is horizontal, y is vertical, z is outward
-                roll, pitch, yaw = rotation_matrix_to_euler_angles(rotation_matrix)
-                quaternion = rotation_matrix_to_quaternion(rotation_matrix)
 
-                apriltag = mbot_apriltag_t()
-                apriltag.tag_id = detect['id']
-                apriltag.pose.x = tvec[0][0]
-                apriltag.pose.y = tvec[1][0]
-                apriltag.pose.z = tvec[2][0]
-                apriltag.pose.angles_rpy = [roll, pitch, yaw]
-                apriltag.pose.angles_quat = quaternion
-                msg.detections.append(apriltag)
+                # Calculate Euler angles 
+                roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
 
-        self.lcm.publish("MBOT_APRILTAG_ARRAY", msg.encode())
+                self.publish_velocity_command(tvec[0][0], tvec[2][0], roll, pitch, yaw)
+        else:
+            self.publish_velocity_command(0, 0)
+            print("No tag in sight")
+
+    def publish_velocity_command(self, x, z, roll=0, pitch=0, yaw=0):
+        """
+        Publish a velocity command based on the x and z offset of the detected tag.
+        """
+        # Constants
+        k_p_linear = 0.001  # Proportional gain for linear velocity
+        k_p_angular = 2  # Proportional gain for angular velocity
+        z_target = 150  # Target distance (millimeters)
+
+        # Calculate angular velocity
+        theta = math.atan2(x, z)  # Angle to target
+        wz = -k_p_angular * theta  # Angular velocity
+        
+        # Calculate linear velocity
+        if z - z_target > 0:
+            vx = k_p_linear * (z - z_target)  # Move forward if target is ahead
+        else:
+            vx = 0  # Stop 
+
+        # Adjust linear velocity based on orientation (optional)
+        # Example: Reduce linear velocity if pitch angle is high
+        max_pitch_angle = 20  # Maximum pitch angle (degrees)
+        if abs(pitch) > max_pitch_angle:
+            vx *= 0.5  # Reduce linear velocity by half if pitch angle exceeds threshold
+
+        # Create the velocity command message
+        command = twist2D_t()
+        command.vx = vx
+        command.wz = wz
+        
+        # Publish the velocity command
+        self.lcm.publish("MBOT_VEL_CMD", command.encode())
 
     def cleanup(self):
         print("Releasing camera resources")
+        self.publish_velocity_command(0, 0)
         if self.cap and self.cap.isOpened():
             self.cap.release()
 
-def rotation_matrix_to_euler_angles(R):
+def calculate_euler_angles_from_rotation_matrix(R):
     """
     Calculate Euler angles (roll, pitch, yaw) from a rotation matrix.
     Assumes the rotation matrix uses the XYZ convention.
@@ -150,25 +169,6 @@ def rotation_matrix_to_euler_angles(R):
 
     return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
-def rotation_matrix_to_quaternion(R):
-    """
-    Convert a rotation matrix to a quaternion.
-    
-    Args:
-        R (numpy.ndarray): The rotation matrix.
-        
-    Returns:
-        numpy.ndarray: The quaternion [qx, qy, qz, qw].
-    """
-    m00, m01, m02, m10, m11, m12, m20, m21, m22 = R.flat
-    qw = np.sqrt(max(0, 1 + m00 + m11 + m22)) / 2
-    qx = np.sqrt(max(0, 1 + m00 - m11 - m22)) / 2
-    qy = np.sqrt(max(0, 1 - m00 + m11 - m22)) / 2
-    qz = np.sqrt(max(0, 1 - m00 - m11 + m22)) / 2
-    qx = np.copysign(qx, m21 - m12)
-    qy = np.copysign(qy, m02 - m20)
-    qz = np.copysign(qz, m10 - m01)
-    return np.array([qx, qy, qz, qw])
 
 if __name__ == '__main__':
     # image width and height here should align with save_image.py
