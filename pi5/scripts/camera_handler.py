@@ -2,6 +2,7 @@
 from picamera2 import Picamera2
 import libcamera
 import logging
+import cv2
 
 logging.basicConfig(
     level=logging.INFO,  # Set to DEBUG for more verbosity during development
@@ -26,6 +27,7 @@ class Camera:
         self.cap.align_configuration(config)
         self.cap.configure(config)
         self.cap.start()
+        self.running = True
         logging.info("Camera initialized.")
 
     def capture_frame(self):
@@ -40,7 +42,7 @@ class Camera:
         Generates frames for streaming purposes.
         :return: A generator yielding encoded frames.
         """
-        while True:
+        while self.running:
             frame = self.capture_frame()
             # Encode the frame
             ret, buffer = cv2.imencode('.jpg', frame)
@@ -52,6 +54,7 @@ class Camera:
         """
         Cleans up the camera resources.
         """
+        self.running = False
         if self.cap:
             logging.info("Releasing camera resources")
             self.cap.close()

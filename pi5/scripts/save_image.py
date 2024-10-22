@@ -1,49 +1,34 @@
 from flask import Flask, Response, render_template, request, jsonify
-from picamera2 import Picamera2
-import libcamera
 import cv2
-import numpy as np
 import os
 
 from utils import register_signal_handlers
 from config import CAMERA_CONFIG
+from camera_handler import Camera
 
 """
-PI 5 Version
 This script displays the video live stream to browser with a button "save image".
 When you click the button, the current frame will be saved to "/images"
-visit: http://your_mbot_ip:5001
+
+url: http://your_mbot_ip:5001
 """
 
-class Camera:
+class CameraWithSave(Camera):
     def __init__(self, camera_id, width, height):
-        self.cap = Picamera2(camera_id)
-        config = self.cap.create_preview_configuration(main={"size": (width, height), "format": "RGB888"})
-        config["transform"] = libcamera.Transform(hflip=0, vflip=1)
-        self.cap.align_configuration(config)
-        self.cap.configure(config)
-        self.cap.start()
+        super().__init__(camera_id, width, height)
         self.image_count = 0
-        self.frame = None
-        self.running = True
 
-    def get_frame(self):
-        return self.cap.capture_array()
-
-    def generate_frames(self):
-        while self.running:
-            frame = self.get_frame()
-            # Encode the frame
-            ret, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
-            yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-
-    def cleanup(self):
-        self.running = False
-        self.cap.close()
-        print("Camera resources released")
+    def save_frame(self, save_path):
+        """
+        Saves the current frame to the given path.
+        :param save_path: Path to save the captured frame.
+        :return: True if saved successfully, False otherwise.
+        """
+        frame = self.capture_frame()
+        if frame is not None:
+            cv2.imwrite(save_path, frame)
+            return True
+        return False
 
 app = Flask(__name__)
 
@@ -59,11 +44,8 @@ def video():
 def save_image():
     # Extract the image save path from the POST request
     camera.image_count += 1
-    save_path = "images/image"+str(camera.image_count)+".jpg"
-    frame = camera.get_frame()
-    if frame is not None:
-        # Save the captured frame to the specified path
-        cv2.imwrite(save_path, frame)
+    save_path = f"images/image{camera.image_count}.jpg"
+    if camera.save_frame(save_path):
         return jsonify({"message": "Image saved successfully", "path": save_path}), 200
     else:
         return jsonify({"message": "Failed to capture image"}), 500
@@ -73,6 +55,6 @@ if __name__ == '__main__':
     image_width = CAMERA_CONFIG["image_width"]
     image_height = CAMERA_CONFIG["image_height"]
 
-    camera = Camera(camera_id, image_width, image_height)
+    camera = CameraWithSave(camera_id, image_width, image_height)
     register_signal_handlers(camera.cleanup)
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5001, threaded=True)

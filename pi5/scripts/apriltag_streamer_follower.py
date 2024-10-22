@@ -1,34 +1,32 @@
 #!/usr/bin/env python3
-from apriltag import apriltag
 from flask import Flask, Response
 import cv2
 import time
 import numpy as np
+import math
+import threading
+import lcm
+from apriltag import apriltag
+from mbot_lcm_msgs.twist2D_t import twist2D_t
 from picamera2 import Picamera2
 import libcamera
 
 from utils import calculate_euler_angles_from_rotation_matrix, register_signal_handlers
 from config import CAMERA_CONFIG
+from camera_handler import Camera
+
 """
-This script displays the video live stream with apriltag detection to browser.
-The pose estimation will display as well.
+Features:
+1. Displays the video live stream with apriltag detection to the browser.
+2. Display the pose estimate values.
+3. Follow apriltag when the tag is in sight (if follow=True).
+
 visit: http://your_mbot_ip:5001
 """
 
-class Camera:
-    def __init__(self, camera_id, width, height, frame_duration):
-        self.cap = Picamera2(camera_id)
-        config = self.cap.create_preview_configuration(
-            main={"size": (width, height), "format": "RGB888"},
-            controls = {
-                'FrameDurationLimits': (frame_duration, frame_duration) # (min, max) microseconds
-            }
-        )
-        config["transform"] = libcamera.Transform(hflip=1, vflip=1)
-        self.cap.align_configuration(config)
-        self.cap.configure(config)
-        self.cap.start()
-
+class CameraWithAprilTagFollow(Camera):
+    def __init__(self, camera_id, width, height, frame_duration, follow=False):
+        super().__init__(camera_id, width, height, frame_duration)
         self.detector = apriltag("tagCustom48h12", threads=1)
         self.skip_frames = 5  # Process every 5th frame for tag detection
         self.frame_count = 0
@@ -40,21 +38,23 @@ class Camera:
         self.small_tag_size = 10.8      # in millimeter
         self.object_points = np.array([
             [-self.tag_size/2,  self.tag_size/2, 0],  # Top-left corner
-            [ self.tag_size/2,  self.tag_size/2, 0], # Top-right corner
-            [ self.tag_size/2, -self.tag_size/2, 0], # Bottom-right corner
-            [-self.tag_size/2, -self.tag_size/2, 0], # Bottom-left corner
+            [ self.tag_size/2,  self.tag_size/2, 0],  # Top-right corner
+            [ self.tag_size/2, -self.tag_size/2, 0],  # Bottom-right corner
+            [-self.tag_size/2, -self.tag_size/2, 0],  # Bottom-left corner
         ], dtype=np.float32)
         self.small_object_points = np.array([
             [-self.small_tag_size/2,  self.small_tag_size/2, 0],  # Top-left corner
-            [ self.small_tag_size/2,  self.small_tag_size/2, 0], # Top-right corner
-            [ self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-right corner
-            [-self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-left corner
+            [ self.small_tag_size/2,  self.small_tag_size/2, 0],  # Top-right corner
+            [ self.small_tag_size/2, -self.small_tag_size/2, 0],  # Bottom-right corner
+            [-self.small_tag_size/2, -self.small_tag_size/2, 0],  # Bottom-left corner
         ], dtype=np.float32)
+        self.lcm = lcm.LCM("udpm://239.255.76.67:7667?ttl=0")
+        self.follow = follow
 
     def generate_frames(self):
-        while True:
+        while self.running:
             self.frame_count += 1
-            frame = self.cap.capture_array()
+            frame = self.capture_frame()
 
             # Process for tag detection only every 5th frame
             if self.frame_count % self.skip_frames == 0:
@@ -70,7 +70,7 @@ class Camera:
                     except RuntimeError as e:
                         if "Unable to create" in str(e) and attempt < max_retries - 1:
                             print(f"Detection failed due to thread creation issue, retrying... Attempt {attempt + 1}")
-                            time.sleep(0.2)  # back off for a moment
+                            time.sleep(0.2)  # Back off for a moment
                         else:
                             raise  # Re-raise the last exception if retries exhausted
 
@@ -84,11 +84,11 @@ class Camera:
                     cv2.polylines(frame, [corners], isClosed=True, color=(0, 255, 0), thickness=2)
 
                     # Pose estimation for detected tag
-                    if detect['id'] < 10: # big tag
+                    if detect['id'] < 10:  # Big tag
                         image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
                         retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-                    if detect['id'] >= 10: # small tag at center
+                    if detect['id'] >= 10:  # Small tag at center
                         image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
                         retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
@@ -98,18 +98,58 @@ class Camera:
                     # Calculate Euler angles
                     roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
 
+                    if self.follow:
+                        self.publish_velocity_command(tvec[0][0], tvec[2][0], roll, pitch, yaw)
+
                     pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f},"
                     orientation_text = f" roll={roll:.2f}, pitch={pitch:.2f}, yaw={yaw:.2f}"
-                    vertical_pos = 40*visible_tags
-                    cv2.putText(frame, pos_text+orientation_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 0, 0), 2)
+                    vertical_pos = 40 * visible_tags
+                    cv2.putText(frame, pos_text + orientation_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 0, 0), 2)
+            elif self.follow:
+                self.publish_velocity_command(0, 0)
 
             # Encode the frame
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+    def publish_velocity_command(self, x, z, roll=0, pitch=0, yaw=0):
+        """
+        Publish a velocity command based on the x and z offset of the detected tag.
+        """
+        # Constants
+        k_p_linear = 0.001  # Proportional gain for linear velocity
+        k_p_angular = 2  # Proportional gain for angular velocity
+        z_target = 150  # Target distance (millimeters)
+
+        # Calculate angular velocity
+        theta = math.atan2(x, z)  # Angle to target
+        wz = -k_p_angular * theta  # Angular velocity
+
+        # Calculate linear velocity
+        if z - z_target > 0:
+            vx = k_p_linear * (z - z_target)  # Move forward if target is ahead
+        else:
+            vx = 0  # Stop
+
+        # Adjust linear velocity based on orientation (optional)
+        # Example: Reduce linear velocity if pitch angle is high
+        max_pitch_angle = 20  # Maximum pitch angle (degrees)
+        if abs(pitch) > max_pitch_angle:
+            vx *= 0.5  # Reduce linear velocity by half if pitch angle exceeds threshold
+
+        # Create the velocity command message
+        command = twist2D_t()
+        command.vx = vx
+        command.wz = wz
+
+        # Publish the velocity command
+        self.lcm.publish("MBOT_VEL_CMD", command.encode())
 
     def cleanup(self):
+        if self.follow:
+            self.publish_velocity_command(0, 0)
         if self.cap:
             print("Releasing camera resources")
             self.cap.close()
@@ -126,8 +166,8 @@ if __name__ == '__main__':
     image_height = CAMERA_CONFIG["image_height"]
     fps = CAMERA_CONFIG["fps"]
 
-    frame_duration = int((1./fps)*1e6)
-    camera = Camera(camera_id, image_width, image_height, frame_duration)
+    frame_duration = int((1./fps) * 1e6)
+    follow_mode = True  # Set this to False if following the tag is not needed
+    camera = CameraWithAprilTagFollow(camera_id, image_width, image_height, frame_duration, follow=follow_mode)
     register_signal_handlers(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)
-
