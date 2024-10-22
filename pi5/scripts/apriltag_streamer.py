@@ -8,6 +8,7 @@ from picamera2 import Picamera2
 import libcamera
 
 from utils import calculate_euler_angles_from_rotation_matrix, register_signal_handlers
+from config import CAMERA_CONFIG
 """
 This script displays the video live stream with apriltag detection to browser.
 The pose estimation will display as well.
@@ -120,11 +121,11 @@ def video():
     return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
-    # image width and height here should align with save_image.py
-    camera_id = 0
-    image_width = 1280
-    image_height = 720
-    fps = 10
+    camera_id = CAMERA_CONFIG["camera_id"]
+    image_width = CAMERA_CONFIG["image_width"]
+    image_height = CAMERA_CONFIG["image_height"]
+    fps = CAMERA_CONFIG["fps"]
+
     frame_duration = int((1./fps)*1e6)
     camera = Camera(camera_id, image_width, image_height, frame_duration)
     register_signal_handlers(camera.cleanup)

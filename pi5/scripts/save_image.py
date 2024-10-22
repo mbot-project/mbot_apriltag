@@ -6,6 +6,8 @@ import numpy as np
 import os
 
 from utils import register_signal_handlers
+from config import CAMERA_CONFIG
+
 """
 PI 5 Version
 This script displays the video live stream to browser with a button "save image".
@@ -67,10 +69,10 @@ def save_image():
         return jsonify({"message": "Failed to capture image"}), 500
 
 if __name__ == '__main__':
-    # image width and height here should align with apriltag_streamer.py
-    camera_id = 0
-    image_width = 1280
-    image_height = 720
+    camera_id = CAMERA_CONFIG["camera_id"]
+    image_width = CAMERA_CONFIG["image_width"]
+    image_height = CAMERA_CONFIG["image_height"]
+
     camera = Camera(camera_id, image_width, image_height)
     register_signal_handlers(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)
