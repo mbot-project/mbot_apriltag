@@ -9,49 +9,16 @@ from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
 from picamera2 import Picamera2
 import libcamera
 
-from utils import rotation_matrix_to_quaternion, register_signal_handlers
-from config import CAMERA_CONFIG
+from utils.utils import rotation_matrix_to_quaternion, rotation_matrix_to_euler_angles, register_signal_handlers
+from utils.config import CAMERA_CONFIG
+from utils.camera_handler import CameraWithAprilTag
 """
 This script publish apriltag lcm message to MBOT_APRILTAG_ARRAY
 """
 
-class Camera:
-    def __init__(self, camera_id, width, height, frame_duration):
-        self.cap = Picamera2(camera_id)
-        config = self.cap.create_preview_configuration(
-            main={"size": (width, height), "format": "RGB888"},
-            controls = {
-                'FrameDurationLimits': (frame_duration, frame_duration) # (min, max) microseconds
-            }
-        )
-        config["transform"] = libcamera.Transform(hflip=1, vflip=1)
-        self.cap.align_configuration(config)
-        self.cap.configure(config)
-        self.cap.start()
-
-        self.detector = apriltag("tagCustom48h12", threads=1)
-        self.skip_frames = 5  # Process every 5th frame for tag detection
-        self.frame_count = 0
-        self.detections = dict()
-        calibration_data = np.load('cam_calibration_data.npz')
-        self.camera_matrix = calibration_data['camera_matrix']
-        self.dist_coeffs = calibration_data['dist_coeffs']
-        self.tag_size = 54              # in millimeter
-        self.small_tag_size = 10.8      # in millimeter
-        self.object_points = np.array([
-            [-self.tag_size/2,  self.tag_size/2, 0],  # Top-left corner
-            [ self.tag_size/2,  self.tag_size/2, 0], # Top-right corner
-            [ self.tag_size/2, -self.tag_size/2, 0], # Bottom-right corner
-            [-self.tag_size/2, -self.tag_size/2, 0], # Bottom-left corner
-        ], dtype=np.float32)
-        self.small_object_points = np.array([
-            [-self.small_tag_size/2,  self.small_tag_size/2, 0],  # Top-left corner
-            [ self.small_tag_size/2,  self.small_tag_size/2, 0], # Top-right corner
-            [ self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-right corner
-            [-self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-left corner
-        ], dtype=np.float32)
-        self.lcm = lcm.LCM("udpm://239.255.76.67:7667?ttl=0")
-        print("Initializing Publisher...")
+class AprilTagPublisher(CameraWithAprilTag):
+    def __init__(self, camera_id, width, height, calibration_data, frame_duration=None):
+        super().__init__(camera_id, width, height, calibration_data, frame_duration)
 
     def detect(self):
         while True:
@@ -114,20 +81,15 @@ class Camera:
 
         self.lcm.publish("MBOT_APRILTAG_ARRAY", msg.encode())
 
-    def cleanup(self):
-        if self.cap:
-            print("Releasing camera resources")
-            self.cap.close()
-            self.cap = None  # Avoid double cleanup
-
 if __name__ == '__main__':
     camera_id = CAMERA_CONFIG["camera_id"]
     image_width = CAMERA_CONFIG["image_width"]
     image_height = CAMERA_CONFIG["image_height"]
     fps = CAMERA_CONFIG["fps"]
 
+    calibration_data = np.load('cam_calibration_data.npz')
     frame_duration = int((1./fps)*1e6)
-    camera = Camera(camera_id, image_width, image_height, frame_duration)
+    camera = AprilTagPublisher(camera_id, image_width, image_height, calibration_data, frame_duration)
     register_signal_handlers(camera.cleanup)
     camera.detect()
 

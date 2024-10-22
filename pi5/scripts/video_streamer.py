@@ -1,7 +1,7 @@
 from flask import Flask, Response
-from utils import register_signal_handlers
-from camera_handler import Camera
-from config import CAMERA_CONFIG
+from utils.utils import register_signal_handlers
+from utils.camera_handler import Camera
+from utils.config import CAMERA_CONFIG
 """
 This script only displays the video live stream to browser.
 This is a simple program to headlessly check if the camera work.

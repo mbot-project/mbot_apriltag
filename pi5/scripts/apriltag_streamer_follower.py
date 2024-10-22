@@ -3,17 +3,10 @@ from flask import Flask, Response
 import cv2
 import time
 import numpy as np
-import math
-import threading
-import lcm
-from apriltag import apriltag
-from mbot_lcm_msgs.twist2D_t import twist2D_t
-from picamera2 import Picamera2
-import libcamera
 
-from utils import calculate_euler_angles_from_rotation_matrix, register_signal_handlers
-from config import CAMERA_CONFIG
-from camera_handler import Camera
+from utils.utils import rotation_matrix_to_euler_angles, register_signal_handlers
+from utils.config import CAMERA_CONFIG
+from utils.camera_handler import CameraWithAprilTag
 
 """
 Features:
@@ -24,31 +17,11 @@ Features:
 visit: http://your_mbot_ip:5001
 """
 
-class CameraWithAprilTagFollow(Camera):
-    def __init__(self, camera_id, width, height, frame_duration, follow=False):
-        super().__init__(camera_id, width, height, frame_duration)
-        self.detector = apriltag("tagCustom48h12", threads=1)
-        self.skip_frames = 5  # Process every 5th frame for tag detection
-        self.frame_count = 0
-        self.detections = dict()
-        calibration_data = np.load('cam_calibration_data.npz')
-        self.camera_matrix = calibration_data['camera_matrix']
-        self.dist_coeffs = calibration_data['dist_coeffs']
-        self.tag_size = 54              # in millimeter
-        self.small_tag_size = 10.8      # in millimeter
-        self.object_points = np.array([
-            [-self.tag_size/2,  self.tag_size/2, 0],  # Top-left corner
-            [ self.tag_size/2,  self.tag_size/2, 0],  # Top-right corner
-            [ self.tag_size/2, -self.tag_size/2, 0],  # Bottom-right corner
-            [-self.tag_size/2, -self.tag_size/2, 0],  # Bottom-left corner
-        ], dtype=np.float32)
-        self.small_object_points = np.array([
-            [-self.small_tag_size/2,  self.small_tag_size/2, 0],  # Top-left corner
-            [ self.small_tag_size/2,  self.small_tag_size/2, 0],  # Top-right corner
-            [ self.small_tag_size/2, -self.small_tag_size/2, 0],  # Bottom-right corner
-            [-self.small_tag_size/2, -self.small_tag_size/2, 0],  # Bottom-left corner
-        ], dtype=np.float32)
-        self.lcm = lcm.LCM("udpm://239.255.76.67:7667?ttl=0")
+class CameraWithAprilTagFollow(CameraWithAprilTag):
+    def __init__(self, camera_id, width, height, calibration_data,
+                 frame_duration, follow=False):
+        super().__init__(camera_id, width, height, calibration_data,
+                         frame_duration)
         self.follow = follow
 
     def generate_frames(self):
@@ -96,7 +69,7 @@ class CameraWithAprilTagFollow(Camera):
                     rotation_matrix, _ = cv2.Rodrigues(rvec)
 
                     # Calculate Euler angles
-                    roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
+                    roll, pitch, yaw = rotation_matrix_to_euler_angles(rotation_matrix)
 
                     if self.follow:
                         self.publish_velocity_command(tvec[0][0], tvec[2][0], roll, pitch, yaw)
@@ -113,39 +86,6 @@ class CameraWithAprilTagFollow(Camera):
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-    def publish_velocity_command(self, x, z, roll=0, pitch=0, yaw=0):
-        """
-        Publish a velocity command based on the x and z offset of the detected tag.
-        """
-        # Constants
-        k_p_linear = 0.001  # Proportional gain for linear velocity
-        k_p_angular = 2  # Proportional gain for angular velocity
-        z_target = 150  # Target distance (millimeters)
-
-        # Calculate angular velocity
-        theta = math.atan2(x, z)  # Angle to target
-        wz = -k_p_angular * theta  # Angular velocity
-
-        # Calculate linear velocity
-        if z - z_target > 0:
-            vx = k_p_linear * (z - z_target)  # Move forward if target is ahead
-        else:
-            vx = 0  # Stop
-
-        # Adjust linear velocity based on orientation (optional)
-        # Example: Reduce linear velocity if pitch angle is high
-        max_pitch_angle = 20  # Maximum pitch angle (degrees)
-        if abs(pitch) > max_pitch_angle:
-            vx *= 0.5  # Reduce linear velocity by half if pitch angle exceeds threshold
-
-        # Create the velocity command message
-        command = twist2D_t()
-        command.vx = vx
-        command.wz = wz
-
-        # Publish the velocity command
-        self.lcm.publish("MBOT_VEL_CMD", command.encode())
 
     def cleanup(self):
         if self.follow:
@@ -167,7 +107,10 @@ if __name__ == '__main__':
     fps = CAMERA_CONFIG["fps"]
 
     frame_duration = int((1./fps) * 1e6)
+    calibration_data = np.load('cam_calibration_data.npz')
     follow_mode = True  # Set this to False if following the tag is not needed
-    camera = CameraWithAprilTagFollow(camera_id, image_width, image_height, frame_duration, follow=follow_mode)
+
+    camera = CameraWithAprilTagFollow(camera_id, image_width, image_height,
+                                      calibration_data, frame_duration, follow=follow_mode)
     register_signal_handlers(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)

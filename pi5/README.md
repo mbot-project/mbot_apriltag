@@ -40,15 +40,11 @@ git clone https://github.com/mbot-project/mbot_apriltag.git
     - Shows the video stream, we use it to save image to `/images` for camera calibration
 - `python3 camera_calibration.py`
     - Use the images from `/images` and output calibration result as `cam_calibration_data.npz`. The result will be used directly by apriltag_streamer.py you don't have to modify anything.
-- `python3 apriltag_streamer.py`
-    - It runs apriltag detection, when tag is detected, pose estimation will be printed on the screen.
 - `python3 apriltag_lcm_publisher.py`
     - Publish apriltag lcm message over `MBOT_APRILTAG_ARRAY`
 - `python3 apriltag_lcm_subscriber.py`
     - Listen to `MBOT_APRILTAG_ARRAY` for apriltag lcm message
-- `python3 apriltag_follower.py`
-    - Allow mbot to follow the apriltag in sight
-- `python3 apriltag_follower_streamer.py`
+- `python3 apriltag_streamer_follower.py`
     - Allow mbot to follow the apriltag in sight, while forwaring video stream to browser
 
 ## Troubleshooting

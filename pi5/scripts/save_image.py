@@ -2,9 +2,9 @@ from flask import Flask, Response, render_template, request, jsonify
 import cv2
 import os
 
-from utils import register_signal_handlers
-from config import CAMERA_CONFIG
-from camera_handler import Camera
+from utils.utils import register_signal_handlers
+from utils.config import CAMERA_CONFIG
+from utils.camera_handler import Camera
 
 """
 This script displays the video live stream to browser with a button "save image".

@@ -2,7 +2,7 @@ import numpy as np
 import signal
 import atexit
 
-def calculate_euler_angles_from_rotation_matrix(R):
+def rotation_matrix_to_euler_angles(R):
     """
     Calculate Euler angles (roll, pitch, yaw) from a rotation matrix.
     Assumes the rotation matrix uses the XYZ convention.
