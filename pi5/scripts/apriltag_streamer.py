@@ -3,13 +3,11 @@ from apriltag import apriltag
 from flask import Flask, Response
 import cv2
 import time
-import atexit
 import numpy as np
 from picamera2 import Picamera2
 import libcamera
-import signal
 
-from geometry import calculate_euler_angles_from_rotation_matrix
+from utils import calculate_euler_angles_from_rotation_matrix, register_signal_handlers
 """
 This script displays the video live stream with apriltag detection to browser.
 The pose estimation will display as well.
@@ -116,11 +114,6 @@ class Camera:
             self.cap.close()
             self.cap = None  # Avoid double cleanup
 
-def signal_handler(sig, frame):
-    print('Received signal to terminate')
-    camera.cleanup()
-    exit(0)
-
 app = Flask(__name__)
 @app.route('/')
 def video():
@@ -134,10 +127,6 @@ if __name__ == '__main__':
     fps = 10
     frame_duration = int((1./fps)*1e6)
     camera = Camera(camera_id, image_width, image_height, frame_duration)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    atexit.register(camera.cleanup)
-
+    register_signal_handlers(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)
 

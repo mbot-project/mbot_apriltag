@@ -1,6 +1,5 @@
 import cv2
 import time
-import atexit
 import numpy as np
 from apriltag import apriltag
 import math
@@ -9,9 +8,8 @@ from mbot_lcm_msgs.mbot_apriltag_array_t import mbot_apriltag_array_t
 from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
 from picamera2 import Picamera2
 import libcamera
-import signal
 
-from geometry import rotation_matrix_to_quaternion
+from utils import rotation_matrix_to_quaternion, register_signal_handlers
 """
 This script publish apriltag lcm message to MBOT_APRILTAG_ARRAY
 """
@@ -121,30 +119,6 @@ class Camera:
             self.cap.close()
             self.cap = None  # Avoid double cleanup
 
-def rotation_matrix_to_euler_angles(R):
-    """
-    Calculate Euler angles (roll, pitch, yaw) from a rotation matrix.
-    Assumes the rotation matrix uses the XYZ convention.
-    """
-    sy = np.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
-    singular = sy < 1e-6
-
-    if not singular:
-        x = np.arctan2(R[2,1], R[2,2])
-        y = np.arctan2(-R[2,0], sy)
-        z = np.arctan2(R[1,0], R[0,0])
-    else:
-        x = np.arctan2(-R[1,2], R[1,1])
-        y = np.arctan2(-R[2,0], sy)
-        z = 0
-
-    return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
-
-def signal_handler(sig, frame):
-    print('Received signal to terminate')
-    camera.cleanup()
-    exit(0)
-
 if __name__ == '__main__':
     # image width and height here should align with save_image.py
     camera_id = 0
@@ -153,11 +127,7 @@ if __name__ == '__main__':
     fps = 10
     frame_duration = int((1./fps)*1e6)
     camera = Camera(camera_id, image_width, image_height, frame_duration)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    atexit.register(camera.cleanup)
-
+    register_signal_handlers(camera.cleanup)
     camera.detect()
 
 

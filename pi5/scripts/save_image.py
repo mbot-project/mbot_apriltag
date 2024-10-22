@@ -1,12 +1,11 @@
 from flask import Flask, Response, render_template, request, jsonify
-from picamera2 import Picamera2 
+from picamera2 import Picamera2
 import libcamera
 import cv2
-import atexit
 import numpy as np
-import signal
 import os
 
+from utils import register_signal_handlers
 """
 PI 5 Version
 This script displays the video live stream to browser with a button "save image".
@@ -32,7 +31,7 @@ class Camera:
     def generate_frames(self):
         while self.running:
             frame = self.get_frame()
-            # Encode the frame 
+            # Encode the frame
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
@@ -44,11 +43,6 @@ class Camera:
         self.cap.close()
         print("Camera resources released")
 
-def signal_handler(sig, frame):
-    print('Shutting down gracefully...')
-    camera.cleanup()  # Clean up camera resources
-    os._exit(0)  # Exit the program
-    
 app = Flask(__name__)
 
 @app.route('/')
@@ -78,6 +72,5 @@ if __name__ == '__main__':
     image_width = 1280
     image_height = 720
     camera = Camera(camera_id, image_width, image_height)
-    atexit.register(camera.cleanup)
-    signal.signal(signal.SIGINT, signal_handler)  # Register the signal handler
+    register_signal_handlers(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)

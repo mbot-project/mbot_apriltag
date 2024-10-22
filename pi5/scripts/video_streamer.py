@@ -2,9 +2,8 @@ from flask import Flask, Response
 from picamera2 import Picamera2
 import libcamera
 import cv2
-import atexit
-import signal
 
+from utils import register_signal_handlers
 """
 PI 5 Version
 This script only displays the video live stream to browser.
@@ -41,14 +40,7 @@ class Camera:
 app = Flask(__name__)
 camera = Camera(0, 1280, 720)
 
-def signal_handler(sig, frame):
-    print('Received signal to terminate')
-    camera.cleanup()
-    exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-atexit.register(camera.cleanup)
+register_signal_handlers(camera.cleanup)
 
 @app.route('/')
 def video():

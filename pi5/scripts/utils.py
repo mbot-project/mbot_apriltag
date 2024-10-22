@@ -1,4 +1,6 @@
 import numpy as np
+import signal
+import atexit
 
 def calculate_euler_angles_from_rotation_matrix(R):
     """
@@ -28,10 +30,6 @@ def rotation_matrix_to_quaternion(R):
     q_y = (R[0, 2] - R[2, 0]) / (4.0 * q_w)
     q_z = (R[1, 0] - R[0, 1]) / (4.0 * q_w)
     return [q_w, q_x, q_y, q_z]
-
-# signal_utils.py
-import signal
-import atexit
 
 def register_signal_handlers(cleanup_function):
     """

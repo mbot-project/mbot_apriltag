@@ -1,7 +1,6 @@
 from flask import Flask, Response
 import cv2
 import time
-import atexit
 import numpy as np
 from apriltag import apriltag
 import math
@@ -10,9 +9,8 @@ import lcm
 from mbot_lcm_msgs.twist2D_t import twist2D_t
 from picamera2 import Picamera2
 import libcamera
-import signal
 
-from geometry import calculate_euler_angles_from_rotation_matrix
+from utils import calculate_euler_angles_from_rotation_matrix, register_signal_handlers
 """
 Features:
 1. Displays the video live stream with apriltag detection to browser
@@ -165,11 +163,6 @@ app = Flask(__name__)
 def video():
     return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-def signal_handler(sig, frame):
-    print('Received signal to terminate')
-    camera.cleanup()
-    exit(0)
-
 if __name__ == '__main__':
     # image width and height here should align with save_image.py
     camera_id = 0
@@ -178,10 +171,6 @@ if __name__ == '__main__':
     fps = 20
     frame_duration = int((1./fps)*1e6)
     camera = Camera(camera_id, image_width, image_height, frame_duration)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    atexit.register(camera.cleanup)
-
+    register_signal_handlers(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)
 
