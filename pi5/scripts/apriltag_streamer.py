@@ -5,10 +5,11 @@ import cv2
 import time
 import atexit
 import numpy as np
-from picamera2 import Picamera2 
+from picamera2 import Picamera2
 import libcamera
 import signal
 
+from geometry import calculate_euler_angles_from_rotation_matrix
 """
 This script displays the video live stream with apriltag detection to browser.
 The pose estimation will display as well.
@@ -95,7 +96,7 @@ class Camera:
                     # Convert rotation vector to a rotation matrix
                     rotation_matrix, _ = cv2.Rodrigues(rvec)
 
-                    # Calculate Euler angles 
+                    # Calculate Euler angles
                     roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
 
                     pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f},"
@@ -115,25 +116,6 @@ class Camera:
             self.cap.close()
             self.cap = None  # Avoid double cleanup
 
-def calculate_euler_angles_from_rotation_matrix(R):
-    """
-    Calculate Euler angles (roll, pitch, yaw) from a rotation matrix.
-    Assumes the rotation matrix uses the XYZ convention.
-    """
-    sy = np.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
-    singular = sy < 1e-6
-
-    if not singular:
-        x = np.arctan2(R[2,1], R[2,2])
-        y = np.arctan2(-R[2,0], sy)
-        z = np.arctan2(R[1,0], R[0,0])
-    else:
-        x = np.arctan2(-R[1,2], R[1,1])
-        y = np.arctan2(-R[2,0], sy)
-        z = 0
-
-    return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
-
 def signal_handler(sig, frame):
     print('Received signal to terminate')
     camera.cleanup()
@@ -151,11 +133,11 @@ if __name__ == '__main__':
     image_height = 720
     fps = 10
     frame_duration = int((1./fps)*1e6)
-    camera = Camera(camera_id, image_width, image_height, frame_duration) 
+    camera = Camera(camera_id, image_width, image_height, frame_duration)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     atexit.register(camera.cleanup)
-    
+
     app.run(host='0.0.0.0', port=5001)
 

@@ -16,7 +16,7 @@ The scripts offer:
 2. Following the install [instruction](https://github.com/AprilRobotics/apriltag) there:
     ```bash
     cd apriltag
-    cmake -B build -DCMAKE_BUILD_TYPE=Release
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=OFF
     sudo cmake --build build --target install
     ```
 

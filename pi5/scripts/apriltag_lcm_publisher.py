@@ -7,10 +7,11 @@ import math
 import lcm
 from mbot_lcm_msgs.mbot_apriltag_array_t import mbot_apriltag_array_t
 from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
-from picamera2 import Picamera2 
+from picamera2 import Picamera2
 import libcamera
 import signal
 
+from geometry import rotation_matrix_to_quaternion
 """
 This script publish apriltag lcm message to MBOT_APRILTAG_ARRAY
 """
@@ -75,7 +76,7 @@ class Camera:
                             time.sleep(0.1)  # Optional: back off for a moment
                         else:
                             raise  # Re-raise the last exception if retries exhausted
-            
+
                 self.publish_apriltag()
 
     def publish_apriltag(self):
@@ -97,7 +98,7 @@ class Camera:
 
                 # Convert rotation vector  to a rotation matrix
                 rotation_matrix, _ = cv2.Rodrigues(rvec)
-         
+
                 # # Calculate Euler angles: roll, pitch, yaw - x, y, z in degrees
                 # for apriltag, x is horizontal, y is vertical, z is outward
                 roll, pitch, yaw = rotation_matrix_to_euler_angles(rotation_matrix)
@@ -139,26 +140,6 @@ def rotation_matrix_to_euler_angles(R):
 
     return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
-def rotation_matrix_to_quaternion(R):
-    """
-    Convert a rotation matrix to a quaternion.
-    
-    Args:
-        R (numpy.ndarray): The rotation matrix.
-        
-    Returns:
-        numpy.ndarray: The quaternion [qx, qy, qz, qw].
-    """
-    m00, m01, m02, m10, m11, m12, m20, m21, m22 = R.flat
-    qw = np.sqrt(max(0, 1 + m00 + m11 + m22)) / 2
-    qx = np.sqrt(max(0, 1 + m00 - m11 - m22)) / 2
-    qy = np.sqrt(max(0, 1 - m00 + m11 - m22)) / 2
-    qz = np.sqrt(max(0, 1 - m00 - m11 + m22)) / 2
-    qx = np.copysign(qx, m21 - m12)
-    qy = np.copysign(qy, m02 - m20)
-    qz = np.copysign(qz, m10 - m01)
-    return np.array([qx, qy, qz, qw])
-
 def signal_handler(sig, frame):
     print('Received signal to terminate')
     camera.cleanup()
@@ -171,12 +152,12 @@ if __name__ == '__main__':
     image_height = 720
     fps = 10
     frame_duration = int((1./fps)*1e6)
-    camera = Camera(camera_id, image_width, image_height, frame_duration) 
+    camera = Camera(camera_id, image_width, image_height, frame_duration)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     atexit.register(camera.cleanup)
-    
+
     camera.detect()
 
 

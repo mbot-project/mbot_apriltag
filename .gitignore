@@ -4,3 +4,4 @@
 */scripts/cam_config.txt
 */scripts/images/*.jpg
 /apriltag_env
+*pycache*

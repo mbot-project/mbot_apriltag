@@ -8,10 +8,11 @@ import math
 import threading
 import lcm
 from mbot_lcm_msgs.twist2D_t import twist2D_t
-from picamera2 import Picamera2 
+from picamera2 import Picamera2
 import libcamera
 import signal
 
+from geometry import calculate_euler_angles_from_rotation_matrix
 """
 Features:
 1. Displays the video live stream with apriltag detection to browser
@@ -34,7 +35,7 @@ class Camera:
         self.cap.align_configuration(config)
         self.cap.configure(config)
         self.cap.start()
-        
+
         self.detector = apriltag("tagCustom48h12", threads=1)
         self.skip_frames = 5  # Process every 5th frame for tag detection
         self.frame_count = 0
@@ -102,9 +103,9 @@ class Camera:
                     # Convert rotation vector to a rotation matrix
                     rotation_matrix, _ = cv2.Rodrigues(rvec)
 
-                    # Calculate Euler angles 
+                    # Calculate Euler angles
                     roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
-                    
+
                     self.publish_velocity_command(tvec[0][0], tvec[2][0], roll, pitch, yaw)
 
                     pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f},"
@@ -131,12 +132,12 @@ class Camera:
         # Calculate angular velocity
         theta = math.atan2(x, z)  # Angle to target
         wz = -k_p_angular * theta  # Angular velocity
-        
+
         # Calculate linear velocity
         if z - z_target > 0:
             vx = k_p_linear * (z - z_target)  # Move forward if target is ahead
         else:
-            vx = 0  # Stop 
+            vx = 0  # Stop
 
         # Adjust linear velocity based on orientation (optional)
         # Example: Reduce linear velocity if pitch angle is high
@@ -148,7 +149,7 @@ class Camera:
         command = twist2D_t()
         command.vx = vx
         command.wz = wz
-        
+
         # Publish the velocity command
         self.lcm.publish("MBOT_VEL_CMD", command.encode())
 
@@ -158,25 +159,6 @@ class Camera:
             print("Releasing camera resources")
             self.cap.close()
             self.cap = None  # Avoid double cleanup
-
-def calculate_euler_angles_from_rotation_matrix(R):
-    """
-    Calculate Euler angles (roll, pitch, yaw) from a rotation matrix.
-    Assumes the rotation matrix uses the XYZ convention.
-    """
-    sy = np.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
-    singular = sy < 1e-6
-
-    if not singular:
-        x = np.arctan2(R[2,1], R[2,2])
-        y = np.arctan2(-R[2,0], sy)
-        z = np.arctan2(R[1,0], R[0,0])
-    else:
-        x = np.arctan2(-R[1,2], R[1,1])
-        y = np.arctan2(-R[2,0], sy)
-        z = 0
-
-    return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
 app = Flask(__name__)
 @app.route('/')
@@ -195,7 +177,7 @@ if __name__ == '__main__':
     image_height = 720
     fps = 20
     frame_duration = int((1./fps)*1e6)
-    camera = Camera(camera_id, image_width, image_height, frame_duration) 
+    camera = Camera(camera_id, image_width, image_height, frame_duration)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
