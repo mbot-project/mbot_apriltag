@@ -1,6 +1,6 @@
 from flask import Flask, Response
 from utils.utils import register_signal_handlers
-from utils.camera_handler import Camera
+from utils.camera import Camera
 from utils.config import CAMERA_CONFIG
 """
 This script only displays the video live stream to browser.

@@ -4,7 +4,7 @@ import os
 
 from utils.utils import register_signal_handlers
 from utils.config import CAMERA_CONFIG
-from utils.camera_handler import Camera
+from utils.camera import Camera
 
 """
 This script displays the video live stream to browser with a button "save image".
