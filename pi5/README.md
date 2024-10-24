@@ -44,6 +44,8 @@ git clone https://github.com/mbot-project/mbot_apriltag.git
     - Publish apriltag lcm message over `MBOT_APRILTAG_ARRAY`
 - `python3 apriltag_lcm_subscriber.py`
     - Listen to `MBOT_APRILTAG_ARRAY` for apriltag lcm message
+- `python3 apriltag_demo.py`
+    - Displays the video live stream with apriltag detection to the browser
 - `python3 apriltag_streamer_follower.py`
     - Allow mbot to follow the apriltag in sight, while forwaring video stream to browser
 

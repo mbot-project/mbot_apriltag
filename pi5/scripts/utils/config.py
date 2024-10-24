@@ -8,5 +8,6 @@ CAMERA_CONFIG = {
 TAG_CONFIG = {
     "tag_size": 54,              # in millimeter
     "small_tag_size": 10.8,      # in millimeter
-    "tag_family": "tagCustom48h12"
+    "tag_family": "tagCustom48h12",
+    "skip_frames": 5             # Process every 5th frame for tag detection
 }
