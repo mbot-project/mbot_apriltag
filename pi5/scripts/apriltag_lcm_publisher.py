@@ -2,16 +2,12 @@ import cv2
 import time
 import numpy as np
 from apriltag import apriltag
-import math
-import lcm
 from mbot_lcm_msgs.mbot_apriltag_array_t import mbot_apriltag_array_t
 from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
-from picamera2 import Picamera2
-import libcamera
 
-from utils.utils import rotation_matrix_to_quaternion, rotation_matrix_to_euler_angles, register_signal_handlers
+from utils.utils import register_signal_handlers, retry_detection
 from utils.config import CAMERA_CONFIG
-from utils.camera_handler import CameraWithAprilTag
+from utils.camera_with_apriltag import CameraWithAprilTag
 """
 This script publish apriltag lcm message to MBOT_APRILTAG_ARRAY
 """
@@ -30,18 +26,8 @@ class AprilTagPublisher(CameraWithAprilTag):
                 # Convert frame to grayscale for detection
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                # Retry logic
-                max_retries = 3
-                for attempt in range(max_retries):
-                    try:
-                        self.detections = self.detector.detect(gray)
-                        break  # Success, exit the retry loop
-                    except RuntimeError as e:
-                        if "Unable to create" in str(e) and attempt < max_retries - 1:
-                            print(f"Detection failed due to thread creation issue, retrying... Attempt {attempt + 1}")
-                            time.sleep(0.1)  # Optional: back off for a moment
-                        else:
-                            raise  # Re-raise the last exception if retries exhausted
+                # Retry logic, prevent quit from one detection fail
+                self.detections = retry_detection(self.detector, gray, 3)
 
                 self.publish_apriltag()
 
@@ -53,28 +39,14 @@ class AprilTagPublisher(CameraWithAprilTag):
         msg.array_size = len(self.detections)
         msg.detections = []
         if msg.array_size > 0:
-            for detect in self.detections:
-                # Pose estimation for detected tag
-                image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
-                if detect['id'] < 10: # big tag
-                    retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
-
-                if detect['id'] >= 10: # small tag at center
-                    retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
-
-                # Convert rotation vector  to a rotation matrix
-                rotation_matrix, _ = cv2.Rodrigues(rvec)
-
-                # # Calculate Euler angles: roll, pitch, yaw - x, y, z in degrees
-                # for apriltag, x is horizontal, y is vertical, z is outward
-                roll, pitch, yaw = rotation_matrix_to_euler_angles(rotation_matrix)
-                quaternion = rotation_matrix_to_quaternion(rotation_matrix)
+            for detection in self.detections:
+                x, y, z, roll, pitch, yaw, quaternion = self.decode_detection(detection)
 
                 apriltag = mbot_apriltag_t()
-                apriltag.tag_id = detect['id']
-                apriltag.pose.x = tvec[0][0]
-                apriltag.pose.y = tvec[1][0]
-                apriltag.pose.z = tvec[2][0]
+                apriltag.tag_id = detection['id']
+                apriltag.pose.x = x
+                apriltag.pose.y = y
+                apriltag.pose.z = z
                 apriltag.pose.angles_rpy = [roll, pitch, yaw]
                 apriltag.pose.angles_quat = quaternion
                 msg.detections.append(apriltag)

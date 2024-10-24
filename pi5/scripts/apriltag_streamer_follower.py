@@ -4,7 +4,7 @@ import numpy as np
 
 from utils.utils import register_signal_handlers
 from utils.config import CAMERA_CONFIG
-from utils.camera_handler import CameraWithAprilTagFollow
+from utils.camera_with_tag_follow import CameraWithTagFollower
 
 """
 Features:
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     frame_duration = int((1./fps) * 1e6)
     calibration_data = np.load('cam_calibration_data.npz')
 
-    camera = CameraWithAprilTagFollow(camera_id, image_width, image_height,
+    camera = CameraWithTagFollower(camera_id, image_width, image_height,
                                       calibration_data, frame_duration)
     register_signal_handlers(camera.cleanup)
     app.run(host='0.0.0.0', port=5001)

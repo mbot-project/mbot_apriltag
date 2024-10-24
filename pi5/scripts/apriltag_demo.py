@@ -4,7 +4,7 @@ import numpy as np
 
 from utils.utils import register_signal_handlers
 from utils.config import CAMERA_CONFIG
-from utils.camera_handler import CameraWithAprilTag
+from utils.camera_with_apriltag import CameraWithAprilTag
 
 """
 Features:
