@@ -5,7 +5,7 @@ from apriltag import apriltag
 from mbot_lcm_msgs.mbot_apriltag_array_t import mbot_apriltag_array_t
 from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
 
-from utils.utils import register_signal_handlers, retry_detection
+from utils.utils import register_signal_handlers
 from utils.config import CAMERA_CONFIG
 from utils.camera_with_apriltag import CameraWithAprilTag
 """
@@ -27,7 +27,7 @@ class AprilTagPublisher(CameraWithAprilTag):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
                 # Retry logic, prevent quit from one detection fail
-                self.detections = retry_detection(self.detector, gray, 3)
+                self.detections = self.retry_detection(gray, 3)
 
                 self.publish_apriltag()
 
