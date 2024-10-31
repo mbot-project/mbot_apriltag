@@ -5,7 +5,6 @@ import numpy as np
 from mbot_lcm_msgs.twist2D_t import twist2D_t
 
 from utils.camera_with_apriltag import CameraWithAprilTag
-from utils.utils import retry_detection
 
 class CameraWithTagFollower(CameraWithAprilTag):
     def __init__(self, camera_id, width, height, calibration_data, frame_duration=None):

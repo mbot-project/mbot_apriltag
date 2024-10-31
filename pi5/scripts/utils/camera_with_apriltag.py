@@ -3,7 +3,8 @@ from apriltag import apriltag
 import numpy as np
 import lcm
 from utils.config import TAG_CONFIG
-from utils.utils import rotation_matrix_to_euler_angles, rotation_matrix_to_quaternion, retry_detection
+
+from utils.utils import rotation_matrix_to_euler_angles, rotation_matrix_to_quaternion
 from utils.camera import Camera
 
 class CameraWithAprilTag(Camera):
@@ -38,7 +39,7 @@ class CameraWithAprilTag(Camera):
         if self.frame_count % self.skip_frames == 0:
             # Convert frame to grayscale and detect tags
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            self.detections = retry_detection(self.detector, gray, retries=3)
+            self.detections = self.retry_detection(gray, retries=3)
 
         # Annotate frame if detections are present
         if self.detections:
@@ -85,3 +86,16 @@ class CameraWithAprilTag(Camera):
 
         # return x, y, z, roll, pitch, yaw
         return tvec[0][0], tvec[1][0], tvec[2][0], roll, pitch, yaw, quaternion
+
+    def retry_detection(self, gray_frame, retries=3):
+        # prevent quit from one detection fail
+        for attempt in range(retries):
+            try:
+                return self.detector.detect(gray_frame)
+            except RuntimeError as e:
+                if "Unable to create" in str(e) and attempt < retries - 1:
+                    print(f"Detection failed, retrying... Attempt {attempt + 1}")
+                    time.sleep(0.2)
+                else:
+                    raise
+        return ()  # Return an empty tuple if detection ultimately fails
