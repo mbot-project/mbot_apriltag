@@ -29,6 +29,7 @@ class AprilTagPublisher(CameraWithAprilTag):
                 # Retry logic, prevent quit from one detection fail
                 self.detections = self.retry_detection(gray, 3)
 
+
                 self.publish_apriltag()
 
     def publish_apriltag(self):
